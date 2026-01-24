@@ -4,9 +4,7 @@ mod access_control;
 mod test;
 mod token_helpers;
 
-use soroban_sdk::{
-    contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, Symbol,
-};
+use soroban_sdk::{contract, contractevent, contractimpl, contracttype, token, Address, BytesN, Env, Symbol};
 
 #[contracttype]
 #[derive(Clone)]
@@ -102,7 +100,12 @@ impl Vault {
         }
 
         let fee_amount: i128 = env.storage().instance().get(&DataKey::FeeAmount).unwrap();
-        let total_amount = payment_amount + fee_amount;
+        let expected_total_amount = payment_amount + fee_amount;
+
+        // Ensure the vault has been funded for this payment before accounting for it.
+        let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
+        let token_client = token::Client::new(&env, &usdc_token);
+        let vault_balance = token_client.balance(&env.current_contract_address());
 
         // Update payment tracking
         let mut available_payments: i128 = env
@@ -116,6 +119,19 @@ impl Vault {
             .get(&DataKey::TotalPayments)
             .unwrap_or(0);
 
+        let available_fees_before: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AvailableFees)
+            .unwrap_or(0);
+        let required_balance_after = available_payments
+            .checked_add(available_fees_before)
+            .and_then(|v| v.checked_add(expected_total_amount))
+            .expect("Amount overflow");
+        if vault_balance < required_balance_after {
+            panic!("Payment not funded");
+        }
+
         available_payments += payment_amount;
         total_payments += payment_amount;
 
@@ -127,11 +143,7 @@ impl Vault {
             .set(&DataKey::TotalPayments, &total_payments);
 
         // Update fee tracking
-        let mut available_fees: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::AvailableFees)
-            .unwrap_or(0);
+        let mut available_fees: i128 = available_fees_before;
         let mut total_fees: i128 = env
             .storage()
             .instance()
@@ -147,11 +159,6 @@ impl Vault {
         env.storage()
             .instance()
             .set(&DataKey::TotalFees, &total_fees);
-
-        // Transfer from user wallet to vault
-        let usdc_token: Address = env.storage().instance().get(&DataKey::UsdcToken).unwrap();
-        let token_client = token::Client::new(&env, &usdc_token);
-        token_client.transfer(&user_wallet, &env.current_contract_address(), &total_amount);
 
         PaymentProcessedEvent {
             user_wallet: user_wallet.clone(),

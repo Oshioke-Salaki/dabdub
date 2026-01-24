@@ -1,6 +1,7 @@
 #![cfg(test)]
 use crate::{access_control, Vault, VaultClient};
 use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env};
+use user_wallet::{UserWallet, UserWalletClient};
 
 #[test]
 fn test_grant_role() {
@@ -123,14 +124,13 @@ fn test_constructor_fee_too_high() {
 }
 
 #[test]
-#[ignore] //TODO Skip until transfer_to_vault implementation
 fn test_process_payment() {
     let env = Env::default();
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
     let operator = Address::generate(&env);
-    let user_wallet = Address::generate(&env);
+    let backend = Address::generate(&env);
 
     let token_admin = Address::generate(&env);
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
@@ -139,16 +139,25 @@ fn test_process_payment() {
     let contract_id = env.register(Vault, (&admin, &usdc, &500_000i128, &1_000_000i128));
     let client = VaultClient::new(&env, &contract_id);
 
+    let user_wallet_id = env.register(
+        UserWallet,
+        (&backend, &contract_id, &usdc, &None::<Address>),
+    );
+    let user_wallet_client = UserWalletClient::new(&env, &user_wallet_id);
+
     // Grant operator role
     client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
 
     // Mint tokens to user wallet
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
-    token_admin_client.mint(&user_wallet, &100_000_000);
+    token_admin_client.mint(&user_wallet_id, &100_000_000);
+
+    // Fund the vault via wallet (payment + fee)
+    user_wallet_client.transfer_to_vault(&backend, &50_000_000);
 
     // Process payment
     let payment_id = BytesN::from_array(&env, &[1u8; 32]);
-    client.process_payment(&operator, &user_wallet, &50_000_000, &payment_id);
+    client.process_payment(&operator, &user_wallet_id, &50_000_000, &payment_id);
 
     // Verify tracking
     let (payments, fees, total) = client.get_available_withdrawal();
@@ -159,7 +168,7 @@ fn test_process_payment() {
     // Verify tokens transferred to vault
     let token_client = token::Client::new(&env, &usdc);
     assert_eq!(token_client.balance(&contract_id), 50_500_000);
-    assert_eq!(token_client.balance(&user_wallet), 49_500_000);
+    assert_eq!(token_client.balance(&user_wallet_id), 49_500_000);
 }
 
 #[test]
@@ -220,14 +229,13 @@ fn test_pause_unpause() {
 }
 
 #[test]
-#[ignore] //TODO Skip until transfer_to_vault implementation
 fn test_verify_vault_accounting() {
     let env = Env::default();
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
     let operator = Address::generate(&env);
-    let user_wallet = Address::generate(&env);
+    let backend = Address::generate(&env);
 
     let token_admin = Address::generate(&env);
     let asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
@@ -238,12 +246,21 @@ fn test_verify_vault_accounting() {
 
     client.grant_role(&admin, &operator, &access_control::OPERATOR_ROLE);
 
+    let user_wallet_id = env.register(
+        UserWallet,
+        (&backend, &contract_id, &usdc, &None::<Address>),
+    );
+    let user_wallet_client = UserWalletClient::new(&env, &user_wallet_id);
+
     // Mint and process payment
     let token_admin_client = token::StellarAssetClient::new(&env, &usdc);
-    token_admin_client.mint(&user_wallet, &100_000_000);
+    token_admin_client.mint(&user_wallet_id, &100_000_000);
+
+    // Fund the vault via wallet (payment + fee)
+    user_wallet_client.transfer_to_vault(&backend, &50_000_000);
 
     let payment_id = BytesN::from_array(&env, &[1u8; 32]);
-    client.process_payment(&operator, &user_wallet, &50_000_000, &payment_id);
+    client.process_payment(&operator, &user_wallet_id, &50_000_000, &payment_id);
 
     // Verify accounting
     assert_eq!(client.verify_vault_accounting(), true);
