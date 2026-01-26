@@ -4,14 +4,31 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { SettlementModule } from './settlement/settlement.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
-import { LoggerModule } from './logger/logger.module';
 import { CacheModule } from './cache/cache.module';
+import { LoggerModule } from './logger/logger.module';
+import { SettlementModule } from './settlement/settlement.module';
+import { SwaggerModule as SwaggerDocModule } from './common/swagger/swagger.module';
+import { HealthModule } from './health/health.module';
+import { WebhookModule } from './webhook/webhook.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { GlobalConfigModule } from './config/config.module';
 import { BullModule } from '@nestjs/bull';
 import { NotificationModule } from './notification/notification.module';
 import { GlobalConfigService } from './config/global-config.service';
+
+
+@Module({
+  imports: [
+    ConfigModule,
+    DatabaseModule,
+    CacheModule,
+    LoggerModule,
+    SettlementModule,
+    HealthModule,
+    WebhookModule,
+    SwaggerDocModule,
 
 @Module({
   imports: [
