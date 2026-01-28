@@ -15,9 +15,12 @@ import { SwaggerModule as SwaggerDocModule } from './common/swagger/swagger.modu
 import { HealthModule } from './health/health.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { NotificationModule } from './notification/notification.module';
+import { GlobalConfigService } from './config/global-config.service';
+import { BlockchainModule } from './blockchain/blockchain.module';
 import { AuthModule } from './auth/auth.module';
 import { PublicModule } from './public/public.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+
 
 @Module({
   imports: [
@@ -45,6 +48,10 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
     NotificationModule,
     AnalyticsModule,
     SettlementModule,
+
+    BlockchainModule,
+
+
     AuthModule,
     HealthModule,
     WebhooksModule,
